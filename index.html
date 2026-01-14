@@ -3,44 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sticker Scanner Pro</title>
+    <title>Sticker Scanner Pro - Opnieuw & Co</title>
+    
     <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    
     <style>
-        body { font-family: sans-serif; margin: 0; background: #f4f4f9; display: flex; flex-direction: column; align-items: center; }
-        #scanner-container { width: 100%; max-width: 500px; height: 300px; border-bottom: 4px solid #007bff; position: relative; overflow: hidden; background: #000; }
+        body { font-family: -apple-system, sans-serif; margin: 0; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; }
+        header { background: #007bff; color: white; width: 100%; padding: 15px; text-align: center; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        
+        #scanner-container { width: 100%; max-width: 500px; height: 350px; position: relative; overflow: hidden; background: #000; }
         video { width: 100%; height: 100%; object-fit: cover; }
-        .overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; height: 60%; border: 2px dashed rgba(255,255,255,0.5); pointer-events: none; }
-        .controls { padding: 20px; width: 100%; box-sizing: border-box; }
-        button { width: 100%; padding: 15px; background: #28a745; color: white; border: none; border-radius: 8px; font-size: 18px; margin-bottom: 10px; cursor: pointer; }
-        #status { font-weight: bold; margin-bottom: 10px; color: #555; text-align: center; }
-        table { width: 95%; border-collapse: collapse; margin-top: 20px; background: white; font-size: 14px; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        
+        /* Scan kader */
+        .overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; height: 40%; border: 2px solid #00ff00; border-radius: 8px; box-shadow: 0 0 0 1000px rgba(0,0,0,0.5); pointer-events: none; }
+        .overlay::after { content: "PLAATS BARCODE HIER"; position: absolute; bottom: -25px; left: 50%; transform: translateX(-50%); color: #00ff00; font-size: 12px; font-weight: bold; }
+
+        .controls { padding: 15px; width: 100%; max-width: 500px; box-sizing: border-box; }
+        button { width: 100%; padding: 15px; border: none; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; margin-bottom: 10px; transition: 0.2s; }
+        .btn-start { background: #28a745; color: white; }
+        .btn-download { background: #6c757d; color: white; }
+        
+        #status { font-size: 14px; color: #333; text-align: center; margin-bottom: 10px; min-height: 20px; }
+        
+        .table-container { width: 100%; overflow-x: auto; padding: 10px; box-sizing: border-box; }
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; font-size: 13px; }
+        th, td { border: 1px solid #ddd; padding: 12px 8px; text-align: left; }
         th { background: #007bff; color: white; }
+        tr:nth-child(even) { background: #f9f9f9; }
     </style>
 </head>
 <body>
+
+<header>STICKER SCANNER PRO</header>
 
 <div id="scanner-container">
     <div class="overlay"></div>
 </div>
 
 <div class="controls">
-    <div id="status">Klik op 'Start' om de camera te activeren</div>
-    <button onclick="startScanner()">Start Scanner</button>
+    <div id="status">Wachten op actie...</div>
+    <button class="btn-start" onclick="startScanner()">START SCANNER</button>
+    <button class="btn-download" onclick="downloadCSV()">DOWNLOAD EXCEL (CSV)</button>
     
-    <h3>Gescande Stickers</h3>
-    <table id="resultTable">
-        <thead>
-            <tr>
-                <th>Datum</th>
-                <th>Product</th>
-                <th>Prijs</th>
-                <th>Barcode</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
+    <div class="table-container">
+        <table id="resultTable">
+            <thead>
+                <tr>
+                    <th>Datum</th>
+                    <th>Product</th>
+                    <th>Prijs</th>
+                    <th>Barcode</th>
+                </tr>
+            </thead>
+            <tbody>
+                </tbody>
+        </table>
+    </div>
 </div>
 
 <script>
@@ -49,29 +68,41 @@
     function startScanner() {
         if (isScanning) return;
         isScanning = true;
-        document.getElementById('status').innerText = "Richt op de barcode...";
+        document.getElementById('status').innerText = "Camera start op...";
 
         Quagga.init({
             inputStream: {
                 name: "Live",
                 type: "LiveStream",
                 target: document.querySelector('#scanner-container'),
-                constraints: { facingMode: "environment" }
+                constraints: {
+                    facingMode: "environment",
+                    aspectRatio: { min: 1, max: 2 },
+                    focusMode: "continuous"
+                }
             },
-            decoder: { readers: ["code_128_reader"] }
+            locator: { patchSize: "medium", halfSample: true },
+            decoder: { readers: ["code_128_reader", "ean_reader"] },
+            locate: true
         }, (err) => {
-            if (err) { alert(err); return; }
+            if (err) { 
+                document.getElementById('status').innerText = "Fout: Geen camera toegang";
+                alert(err); 
+                return; 
+            }
             Quagga.start();
+            document.getElementById('status').innerText = "Scanner actief. Richt op de barcode.";
         });
 
         Quagga.onDetected(async (data) => {
             const code = data.codeResult.code;
-            Quagga.stop();
-            isScanning = false;
-            document.getElementById('status').innerText = "Barcode gevonden! Bezig met tekst herkenning...";
-            
-            // Maak een foto van de huidige video stream voor OCR
-            await processOCR(code);
+            // Alleen verwerken als de code lang genoeg is (voorkomt foutieve kleine scans)
+            if (code && code.length > 5) {
+                Quagga.stop();
+                isScanning = false;
+                document.getElementById('status').innerText = "Barcode gevonden: " + code + ". Tekst lezen...";
+                await processOCR(code);
+            }
         });
     }
 
@@ -82,30 +113,59 @@
         canvas.height = video.videoHeight;
         canvas.getContext('2d').drawImage(video, 0, 0);
 
-        // Voer OCR uit
-        const result = await Tesseract.recognize(canvas, 'nld');
-        const text = result.data.text;
+        try {
+            const result = await Tesseract.recognize(canvas, 'nld');
+            const text = result.data.text;
 
-        // Logica om data te filteren
-        const prijsMatch = text.match(/€?\s?(\d+[,.]\d{2})/);
-        const datumMatch = text.match(/\d{2}-\d{2}-\d{2}/);
-        const regels = text.split('\n').filter(r => r.trim().length > 5);
+            // Zoek prijs (bijv 175,00)
+            const prijsMatch = text.match(/(\d+[,.]\d{2})/);
+            // Zoek datum (xx-xx-xx)
+            const datumMatch = text.match(/\d{2}-\d{2}-\d{2}/);
+            // Productnaam is vaak de eerste zin met meer dan 5 letters
+            const regels = text.split('\n').map(r => r.trim()).filter(r => r.length > 5);
 
-        const data = {
-            datum: datumMatch ? datumMatch[0] : "Niet gevonden",
-            product: regels[0] ? regels[0].trim() : "Onbekend",
-            prijs: prijsMatch ? prijsMatch[1] : "0,00",
-            barcode: barcode
-        };
+            const gescandeData = {
+                datum: datumMatch ? datumMatch[0] : "Niet gevonden",
+                product: regels[0] ? regels[0] : "Onbekend",
+                prijs: prijsMatch ? prijsMatch[0] : "0,00",
+                barcode: barcode
+            };
 
-        addToTable(data);
-        document.getElementById('status').innerText = "Klaar! Klaar voor volgende scan.";
+            addToTable(gescandeData);
+            document.getElementById('status').innerText = "Gereed voor volgende scan.";
+        } catch (e) {
+            document.getElementById('status').innerText = "Tekstherkenning mislukt. Alleen barcode opgeslagen.";
+            addToTable({datum: "-", product: "OCR Fout", prijs: "-", barcode: barcode});
+        }
     }
 
     function addToTable(data) {
         const tbody = document.querySelector('#resultTable tbody');
         const row = tbody.insertRow(0);
         row.innerHTML = `<td>${data.datum}</td><td>${data.product}</td><td>€ ${data.prijs}</td><td>${data.barcode}</td>`;
+    }
+
+    function downloadCSV() {
+        let csv = "Datum,Product,Prijs,Barcode\n";
+        const rows = document.querySelectorAll("#resultTable tbody tr");
+        
+        if (rows.length === 0) {
+            alert("Nog geen gegevens gescand!");
+            return;
+        }
+
+        rows.forEach(row => {
+            const cols = row.querySelectorAll("td");
+            const rowData = Array.from(cols).map(col => col.innerText.replace("€ ", "").replace(",", "."));
+            csv += rowData.join(",") + "\n";
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'stickers_export.csv';
+        a.click();
     }
 </script>
 
