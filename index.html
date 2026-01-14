@@ -3,173 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sticker Scanner Pro</title>
+    <title>Sticker Scanner Pro - Fix Datum</title>
     <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js"></script>
     <style>
         body { font-family: -apple-system, sans-serif; margin: 0; background: #f4f4f9; display: flex; flex-direction: column; align-items: center; }
         header { background: #e62222; color: white; width: 100%; padding: 15px; text-align: center; font-weight: bold; }
-        
-        #scanner-container { width: 100%; max-width: 500px; height: 400px; position: relative; background: #000; overflow: hidden; }
+        #scanner-container { width: 100%; max-width: 500px; height: 350px; position: relative; background: #000; overflow: hidden; }
         video { width: 100%; height: 100%; object-fit: cover; }
-        
-        /* Het groene kader is nu puur ter indicatie, de camera scant ALLES binnen dit vlak */
-        .overlay { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            width: 90%; height: 80%; border: 4px solid #00ff00; pointer-events: none; 
-            box-shadow: 0 0 0 1000px rgba(0,0,0,0.5); 
-        }
-        
-        .controls { padding: 15px; width: 100%; max-width: 800px; box-sizing: border-box; }
-        #status { text-align: center; margin: 10px; font-weight: bold; color: #e62222; font-size: 16px; background: white; padding: 10px; border-radius: 8px; }
-        
-        table { width: 100%; border-collapse: collapse; background: white; margin-top: 20px; font-size: 11px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; vertical-align: middle; }
+        .overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; height: 75%; border: 3px solid #00ff00; pointer-events: none; box-shadow: 0 0 0 1000px rgba(0,0,0,0.5); }
+        .status-box { padding: 10px; width: 90%; max-width: 500px; margin: 10px; background: white; border-radius: 8px; text-align: center; font-weight: bold; color: #e62222; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        table { width: 95%; border-collapse: collapse; background: white; margin-top: 10px; font-size: 11px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
         th { background: #eee; }
-        .barcode-svg { width: 140px; height: 60px; }
+        .barcode-svg { width: 130px; height: 50px; }
+        .btn-download { background: #6c757d; color: white; width: 90%; padding: 12px; border: none; border-radius: 8px; margin: 15px; font-weight: bold; }
     </style>
 </head>
 <body>
 
-<header>STICKER SCANNER FULL-VIEW</header>
+<header>OPNIEUW & CO SCANNER</header>
 
 <div id="scanner-container">
     <div class="overlay"></div>
 </div>
 
-<div class="controls">
-    <div id="status">Richt de camera op de hele sticker...</div>
-    
-    <table id="resultTable">
-        <thead>
-            <tr>
-                <th>Datum</th>
-                <th>Product</th>
-                <th>Prijs</th>
-                <th>Barcode (Fysiek)</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
-    
-    <button onclick="downloadCSV()" style="background:#6c757d; color:white; margin-top:20px; width:100%; padding:15px; border:none; border-radius:10px; font-weight:bold;">Download Excel (CSV)</button>
-</div>
+<div class="status-box" id="status">Richt de camera op de sticker...</div>
+
+<table id="resultTable">
+    <thead>
+        <tr>
+            <th>Datum</th>
+            <th>Product</th>
+            <th>Prijs</th>
+            <th>Barcode (Fysiek)</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<button class="btn-download" onclick="downloadCSV()">Download Lijst (CSV)</button>
 
 <script>
     let isProcessing = false;
 
-    // Start de camera direct bij het openen van de pagina
     window.onload = function() {
         Quagga.init({
             inputStream: {
-                name: "Live",
-                type: "LiveStream",
-                target: document.querySelector('#scanner-container'),
-                constraints: {
-                    facingMode: "environment",
-                    width: { min: 640, ideal: 1280 },
-                    height: { min: 480, ideal: 720 },
-                    aspectRatio: { min: 1, max: 2 }
-                },
+                name: "Live", type: "LiveStream", target: document.querySelector('#scanner-container'),
+                constraints: { facingMode: "environment", width: 1280, height: 720 }
             },
-            locator: {
-                patchSize: "large", // "large" zorgt ervoor dat hij over de hele sticker zoekt
-                halfSample: false   // Verbetert de nauwkeurigheid op afstand
-            },
-            decoder: {
-                readers: ["code_128_reader"] // Type sticker van Opnieuw & Co
-            },
-            locate: true // Cruciaal: hij zoekt nu actief naar de barcode in het hele beeld
-        }, function(err) {
-            if (err) { alert("Camera fout: " + err); return; }
-            Quagga.start();
-        });
+            locator: { patchSize: "large", halfSample: false },
+            decoder: { readers: ["code_128_reader"] },
+            locate: true
+        }, (err) => { if (!err) Quagga.start(); });
 
-        Quagga.onDetected(handleDetection);
+        Quagga.onDetected(handleScan);
     };
 
-    async function handleDetection(data) {
+    async function handleScan(data) {
         const code = data.codeResult.code;
-        
-        // Alleen verwerken als we niet al bezig zijn en de code betrouwbaar lijkt
         if (code && !isProcessing) {
             isProcessing = true;
-            document.getElementById('status').innerText = "STICKER HERKEND!";
+            document.getElementById('status').innerText = "BEET! Data verwerken...";
             
-            // Snapshot maken voor de tekst (OCR)
             const video = document.querySelector('video');
             const canvas = document.createElement('canvas');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
+            const ctx = canvas.getContext('2d');
+            
+            // Beeldbewerking voor betere OCR van de kleine datum
+            ctx.filter = "contrast(150%) brightness(110%)";
+            ctx.drawImage(video, 0, 0);
 
-            // OCR uitvoeren op de hele afbeelding
             try {
-                const ocrResult = await Tesseract.recognize(canvas, 'nld');
-                const text = ocrResult.data.text;
+                const result = await Tesseract.recognize(canvas, 'nld');
+                const text = result.data.text;
+                console.log("Gelezen tekst:", text); // Voor debugging in browser console
 
-                // Data eruit vissen
-                const datumMatch = text.match(/\d{2}-\d{2}-\d{2}/);
-                const prijsMatch = text.match(/(\d+[,.]\d{2})/);
-                const regels = text.split('\n').map(r => r.trim()).filter(r => r.length > 3);
-
-                const gescandeSticker = {
-                    datum: datumMatch ? datumMatch[0] : "-",
-                    product: regels[0] ? regels[0] : "Onbekend",
-                    prijs: prijsMatch ? "€ " + prijsMatch[0] : "-",
-                    barcode: code
-                };
-
-                addStickerToTable(gescandeSticker);
+                // Verbeterde Datum Regex (zoekt naar DD-MM-YY of DD-MM-YYYY)
+                const datumMatch = text.match(/(\d{2}[-\/]\d{2}[-\/]\d{2,4})/);
                 
-                // Korte pauze zodat hij niet 100 keer dezelfde sticker scant
-                setTimeout(() => {
-                    isProcessing = false;
-                    document.getElementById('status').innerText = "Klaar voor volgende sticker...";
-                }, 3000);
-            } catch (e) {
-                isProcessing = false;
-            }
-        }
-    }
+                // Prijs Regex
+                const prijsMatch = text.match(/(\d+[,.]\d{2})/);
+                
+                // Productnaam (meestal de regel boven of onder de datum)
+                const regels = text.split('\n').map(r => r.trim()).filter(r => r.length > 4);
 
-    function addStickerToTable(data) {
-        const tbody = document.querySelector('#resultTable tbody');
-        const row = tbody.insertRow(0);
-        const svgId = "bc-" + Math.random().toString(36).substr(2, 9);
-
-        row.innerHTML = `
-            <td>${data.datum}</td>
-            <td>${data.product}</td>
-            <td>${data.prijs}</td>
-            <td><svg id="${svgId}"></svg></td>
-        `;
-
-        // Teken de fysieke barcode (de streepjes)
-        JsBarcode("#" + svgId, data.barcode, {
-            format: "CODE128",
-            width: 1.5,
-            height: 50,
-            displayValue: true, // Laat het nummer klein onder de streepjes zien
-            fontSize: 14
-        });
-    }
-
-    function downloadCSV() {
-        let csv = "Datum,Product,Prijs,Barcode\n";
-        document.querySelectorAll("#resultTable tbody tr").forEach(row => {
-            const cols = row.querySelectorAll("td");
-            // Haal de tekstwaarde van de barcode uit de SVG data
-            const bCode = row.querySelector('svg').textContent || ""; 
-            csv += `"${cols[0].innerText}","${cols[1].innerText}","${cols[2].innerText}","${bCode}"\n`;
-        });
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = 'mijn_stickers.csv'; a.click();
-    }
-</script>
-
-</body>
-</html>
+                addStickerToTable({
+                    datum: datumMatch ? datumMatch[0] : "Check sticker",
+                    product: regels[0] || "Onbekend",
+                    prijs: prijsMatch ? "€ " + prijsMatch[0] : "-",
+                    barcode:
