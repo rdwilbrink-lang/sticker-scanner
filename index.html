@@ -3,33 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sticker Scanner Pro - Ultra Scan</title>
-    <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
+    <title>Sticker Scanner Pro - Native Power</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js"></script>
     <style>
         body { font-family: -apple-system, sans-serif; margin: 0; background: #f4f4f9; display: flex; flex-direction: column; align-items: center; }
-        header { background: #e62222; color: white; width: 100%; padding: 20px; text-align: center; font-weight: bold; font-size: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        header { background: #e62222; color: white; width: 100%; padding: 20px; text-align: center; font-weight: bold; font-size: 20px; }
         .main-ui { width: 90%; max-width: 500px; display: flex; flex-direction: column; align-items: center; gap: 15px; margin-top: 20px; }
-        
-        .photo-input-label {
-            background: #28a745; color: white; width: 100%; padding: 25px; 
-            border-radius: 15px; text-align: center; font-size: 22px; font-weight: bold;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2); cursor: pointer; transition: 0.2s;
-        }
-        .photo-input-label:active { transform: scale(0.98); background: #218838; }
+        .photo-label { background: #28a745; color: white; width: 100%; padding: 25px; border-radius: 15px; text-align: center; font-size: 22px; font-weight: bold; cursor: pointer; }
         #photo-input { display: none; }
-
-        #status { font-weight: bold; color: #333; text-align: center; background: white; padding: 10px; border-radius: 8px; width: 100%; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        
-        .table-container { width: 100%; overflow-x: auto; margin-top: 10px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        #status { font-weight: bold; text-align: center; padding: 10px; width: 100%; border-radius: 8px; background: white; }
+        .table-container { width: 100%; overflow-x: auto; margin-top: 15px; border-radius: 10px; }
         table { width: 100%; border-collapse: collapse; background: white; font-size: 11px; }
-        th, td { border: 1px solid #eee; padding: 12px; text-align: center; vertical-align: middle; }
-        th { background: #f8f9fa; color: #666; text-transform: uppercase; font-size: 10px; }
-        .barcode-svg { width: 110px; height: 45px; }
-        
-        .action-btns { width: 100%; display: flex; gap: 10px; margin-top: 20px; }
-        .btn { flex: 1; padding: 15px; border: none; border-radius: 10px; font-weight: bold; color: white; cursor: pointer; }
+        th, td { border: 1px solid #eee; padding: 12px; text-align: center; }
+        th { background: #f8f9fa; color: #666; font-size: 10px; }
     </style>
 </head>
 <body>
@@ -39,9 +26,7 @@
 <div class="main-ui">
     <div id="status">Maak een foto van de hele sticker</div>
     
-    <label for="photo-input" class="photo-input-label">
-        📷 START SCAN
-    </label>
+    <label for="photo-input" class="photo-label">📷 SCAN STICKER</label>
     <input type="file" id="photo-input" accept="image/*" capture="environment">
 
     <div class="table-container">
@@ -58,10 +43,8 @@
         </table>
     </div>
 
-    <div class="action-btns">
-        <button class="btn" style="background:#007bff;" onclick="downloadCSV()">DOWNLOAD EXCEL</button>
-        <button class="btn" style="background:#dc3545;" onclick="clearData()">RESET LIJST</button>
-    </div>
+    <button style="background:#007bff; color:white; border:none; padding:15px; border-radius:10px; width:100%; font-weight:bold;" onclick="downloadCSV()">DOWNLOAD EXCEL</button>
+    <button style="background:#dc3545; color:white; border:none; padding:10px; border-radius:10px; width:100%; margin-top:10px;" onclick="clearData()">RESET LIJST</button>
 </div>
 
 <script>
@@ -74,8 +57,8 @@
         const file = e.target.files[0];
         if (!file) return;
 
-        status.innerText = "Bezig met analyseren... houd vol!";
-        status.style.color = "#e67e22";
+        status.innerText = "Bezig met analyseren...";
+        status.style.color = "orange";
 
         const img = new Image();
         img.src = URL.createObjectURL(file);
@@ -83,38 +66,34 @@
         img.onload = async () => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            
-            // We maken de foto iets kleiner voor snellere verwerking, maar houden hem scherp
-            const scale = 1500 / img.width;
-            canvas.width = 1500;
-            canvas.height = img.height * scale;
-
-            // STAP 1: Optimaliseer de foto voor de Barcode (Extreem contrast)
-            ctx.filter = "contrast(250%) grayscale(100%) brightness(80%)";
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            const processedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
 
             try {
-                // STAP 2: Barcode zoeken met verbeterde instellingen
-                const barcodeResult = await new Promise(resolve => {
-                    Quagga.decodeSingle({
-                        src: processedDataUrl,
-                        decoder: { readers: ["code_128_reader"] },
-                        locate: true,
-                        patchSize: "large"
-                    }, res => resolve(res));
-                });
+                // STAP 1: Gebruik de ingebouwde Barcode Detector van de iPhone zelf
+                let barcodeVal = null;
+                if ('BarcodeDetector' in window) {
+                    const detector = new BarcodeDetector({ formats: ['code_128'] });
+                    const barcodes = await detector.detect(canvas);
+                    if (barcodes.length > 0) barcodeVal = barcodes[0].rawValue;
+                }
 
-                // STAP 3: Tekst lezen (Datum, Prijs, Product)
-                // Voor tekst gebruiken we een iets minder extreem filter
-                ctx.filter = "contrast(150%) brightness(100%)";
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                // STAP 2: Als de iPhone detector niet werkt, probeer Quagga als backup
+                if (!barcodeVal) {
+                    const result = await new Promise(resolve => {
+                        Quagga.decodeSingle({ src: img.src, decoder: { readers: ["code_128_reader"] }, locate: true }, r => resolve(r));
+                    });
+                    if (result && result.codeResult) barcodeVal = result.codeResult.code;
+                }
+
+                // STAP 3: Lees tekst met Tesseract
                 const ocr = await Tesseract.recognize(canvas, 'nld');
                 const text = ocr.data.text;
                 
                 const datum = text.match(/(\d{2}[-\/]\d{2}[-\/]\d{2,4})/) ? text.match(/(\d{2}[-\/]\d{2}[-\/]\d{2,4})/)[0] : "-";
                 const prijs = text.match(/(\d+[,.]\d{2})/) ? "€ " + text.match(/(\d+[,.]\d{2})/)[0] : "-";
-                const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 4);
+                const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 5);
                 
                 let product = "Onbekend";
                 for(let l of lines) {
@@ -123,21 +102,19 @@
                     }
                 }
 
-                const barcodeNum = (barcodeResult && barcodeResult.codeResult) ? barcodeResult.codeResult.code : null;
-
-                if (barcodeNum) {
-                    savedScans.unshift({ id: Date.now(), datum, product, prijs, barcode: barcodeNum });
+                if (barcodeVal) {
+                    savedScans.unshift({ id: Date.now(), datum, product, prijs, barcode: barcodeVal });
                     localStorage.setItem('scans', JSON.stringify(savedScans));
                     renderTable();
-                    status.innerText = "✅ Sticker succesvol toegevoegd!";
+                    status.innerText = "✅ Succes!";
                     status.style.color = "green";
                 } else {
-                    status.innerText = "❌ Barcode niet gevonden. Probeer de barcode rechter in beeld te krijgen.";
+                    status.innerText = "❌ Geen barcode gevonden. Probeer de sticker platter te fotograferen.";
                     status.style.color = "red";
                 }
 
             } catch (err) {
-                status.innerText = "⚠️ Fout bij verwerken.";
+                status.innerText = "⚠️ Fout: " + err;
             }
         };
     });
@@ -147,13 +124,12 @@
         tbody.innerHTML = "";
         savedScans.forEach(s => {
             const row = tbody.insertRow();
-            const svgId = "bc-" + s.id;
-            row.innerHTML = `<td>${s.datum}</td><td>${s.product}</td><td>${s.prijs}</td><td><svg id="${svgId}"></svg></td>`;
-            JsBarcode("#" + svgId, s.barcode, { format: "CODE128", width: 1.2, height: 40, displayValue: true, fontSize: 12 });
+            row.innerHTML = `<td>${s.datum}</td><td>${s.product}</td><td>${s.prijs}</td><td><svg id="bc-${s.id}"></svg></td>`;
+            JsBarcode("#bc-" + s.id, s.barcode, { format: "CODE128", width: 1.2, height: 40, displayValue: true, fontSize: 12 });
         });
     }
 
-    function clearData() { if(confirm("Tabel leegmaken?")) { savedScans=[]; localStorage.removeItem('scans'); renderTable(); status.innerText = "Tabel is leeg"; } }
+    function clearData() { if(confirm("Lijst wissen?")) { savedScans=[]; localStorage.removeItem('scans'); renderTable(); } }
     
     function downloadCSV() {
         let csv = "Datum,Product,Prijs,Barcode\n";
