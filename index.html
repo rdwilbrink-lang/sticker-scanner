@@ -31,6 +31,7 @@
             box-shadow: 0 0 15px 5px rgba(59, 130, 246, 0.5);
             animation: scan 2s linear infinite;
             display: none;
+            z-index: 10;
         }
         @keyframes scan {
             0% { top: 0; }
@@ -178,12 +179,18 @@
             }
             try {
                 const constraints = {
-                    video: { facingMode: useFacingMode }
+                    video: { 
+                        facingMode: useFacingMode,
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
                 };
                 currentStream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = currentStream;
+                await video.play();
             } catch (err) {
-                showError("Kan geen toegang krijgen tot de camera. Geef toestemming.");
+                console.error("Camera error:", err);
+                showError("Kan geen toegang krijgen tot de camera. Zorg voor HTTPS en toestemming.");
             }
         }
 
@@ -200,23 +207,21 @@
 
         // Render history
         function renderHistory() {
-            if (scanHistory.length === 0) {
-                emptyState.classList.remove('hidden');
-                // Verwijder alle rijen behalve empty state
-                Array.from(historyTable.children).forEach(child => {
-                    if (child.id !== 'empty-state') child.remove();
-                });
-                return;
-            }
-
-            emptyState.classList.add('hidden');
-            // Reset table content
+            // Reset table content (behalve empty state)
             Array.from(historyTable.children).forEach(child => {
                 if (child.id !== 'empty-state') child.remove();
             });
 
+            if (scanHistory.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+
             // Re-render items (nieuwste bovenaan)
             scanHistory.slice().reverse().forEach((item, index) => {
+                const originalIndex = scanHistory.length - 1 - index;
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-slate-50 transition-colors group";
                 tr.innerHTML = `
@@ -234,7 +239,7 @@
                         ${item.barcode || 'Geen barcode'}
                     </td>
                     <td class="px-6 py-4 text-right">
-                        <button onclick="window.deleteItem(${scanHistory.length - 1 - index})" class="p-2 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                        <button onclick="window.deleteItem(${originalIndex})" class="p-2 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
                             <i data-lucide="x-circle" class="w-5 h-5"></i>
                         </button>
                     </td>
@@ -260,18 +265,26 @@
 
         // AI Scan Logic
         btnScan.addEventListener('click', async () => {
+            if (btnScan.disabled) return;
+            
             btnScan.disabled = true;
             scannerLine.style.display = 'block';
             loader.classList.remove('hidden');
-
-            // Capture image from video
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0);
-            const base64Image = canvas.toDataURL('image/jpeg').split(',')[1];
+            errorMsg.classList.add('hidden');
 
             try {
+                // Check of video draait
+                if (video.readyState !== 4) {
+                    throw new Error("Camera is nog niet klaar.");
+                }
+
+                // Capture image from video
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0);
+                const base64Image = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+
                 const prompt = "Analyseer deze winkelsticker. Haal de volgende informatie op in JSON formaat: { 'datum': 'datum op sticker', 'omschrijving': 'korte productomschrijving', 'prijs': 'prijs als getal', 'barcode': 'het volledige barcode nummer onder de streepjescode', 'extra': 'overige info zoals kortingspercentage' }. Gebruik de Nederlandse taal voor de velden.";
                 
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
@@ -284,21 +297,31 @@
                                 { inlineData: { mimeType: "image/jpeg", data: base64Image } }
                             ]
                         }],
-                        generationConfig: { responseMimeType: "application/json" }
+                        generationConfig: { 
+                            responseMimeType: "application/json",
+                            temperature: 0.1
+                        }
                     })
                 });
 
-                if (!response.ok) throw new Error("AI Service Fout");
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error?.message || "AI Service Fout");
+                }
 
                 const result = await response.json();
-                const data = JSON.parse(result.candidates[0].content.parts[0].text);
+                const textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                if (!textResponse) throw new Error("Geen antwoord van AI.");
+                
+                const data = JSON.parse(textResponse);
                 
                 scanHistory.push(data);
                 localStorage.setItem('scanHistory', JSON.stringify(scanHistory));
                 renderHistory();
 
             } catch (err) {
-                showError("Kon de sticker niet goed lezen. Zorg voor scherper beeld.");
+                showError("Scan mislukt: " + err.message);
                 console.error(err);
             } finally {
                 btnScan.disabled = false;
@@ -308,10 +331,10 @@
         });
 
         // Start
-        window.onload = () => {
+        window.addEventListener('load', () => {
             startCamera();
             renderHistory();
-        };
+        });
     </script>
 </body>
 </html>
