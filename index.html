@@ -2,138 +2,316 @@
 <html lang="nl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Barcode Expert Scanner</title>
-    <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sticker Scan Systeem</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.0/lucide.min.js"></script>
     <style>
-        body { font-family: -apple-system, sans-serif; margin: 0; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; }
-        header { background: #e62222; color: white; width: 100%; padding: 20px; text-align: center; font-weight: bold; }
-        #scanner-container { width: 100%; max-width: 500px; height: 300px; background: #000; position: relative; overflow: hidden; }
-        video { width: 100%; height: 100%; object-fit: cover; }
-        .scan-line { position: absolute; top: 50%; left: 10%; width: 80%; height: 2px; background: red; box-shadow: 0 0 8px red; animation: move 2s infinite; }
-        @keyframes move { 0%, 100% { top: 30%; } 50% { top: 70%; } }
-        .info-box { width: 90%; background: white; margin-top: -20px; padding: 15px; border-radius: 10px; z-index: 10; box-shadow: 0 4px 10px rgba(0,0,0,0.1); text-align: center; }
-        .table-container { width: 100%; overflow-x: auto; margin-top: 20px; }
-        table { width: 100%; border-collapse: collapse; background: white; font-size: 12px; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
-        th { background: #eee; }
-        .btn { padding: 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin: 10px; color: white; }
+        .gradient-bg {
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        }
+        .scan-container {
+            position: relative;
+            overflow: hidden;
+            border-radius: 1rem;
+            aspect-ratio: 4/3;
+        }
+        #video-feed {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .scanner-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 15px 5px rgba(59, 130, 246, 0.5);
+            animation: scan 2s linear infinite;
+            display: none;
+        }
+        @keyframes scan {
+            0% { top: 0; }
+            100% { top: 100%; }
+        }
     </style>
 </head>
-<body>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-900">
 
-<header>BARCODE POWER SCANNER</header>
+    <!-- Header -->
+    <header class="gradient-bg text-white py-6 shadow-lg mb-8">
+        <div class="container mx-auto px-4 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <i data-lucide="barcode" class="w-8 h-8"></i>
+                <h1 class="text-2xl font-bold tracking-tight">SmartScan Retail</h1>
+            </div>
+            <div id="status-badge" class="bg-blue-400/30 px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2">
+                <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                Systeem Gereed
+            </div>
+        </div>
+    </header>
 
-<div id="scanner-container">
-    <div class="scan-line"></div>
-</div>
+    <main class="container mx-auto px-4 pb-20">
+        <div class="grid lg:grid-cols-2 gap-8">
+            
+            <!-- Linker kolom: Scanner -->
+            <section class="space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="camera" class="text-blue-600"></i>
+                        Nieuwe Sticker Scannen
+                    </h2>
+                    
+                    <div class="scan-container bg-slate-900 mb-4">
+                        <video id="video-feed" autoplay playsinline muted></video>
+                        <div id="scanner-line" class="scanner-line"></div>
+                        <canvas id="capture-canvas" class="hidden"></canvas>
+                    </div>
 
-<div class="info-box" id="last-result">
-    Focus op de barcode...
-</div>
+                    <div class="flex gap-3">
+                        <button id="btn-scan" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2">
+                            <i data-lucide="scan"></i>
+                            SCAN STICKER
+                        </button>
+                        <button id="btn-switch-camera" class="bg-slate-100 hover:bg-slate-200 p-4 rounded-xl text-slate-600 transition-colors">
+                            <i data-lucide="refresh-cw"></i>
+                        </button>
+                    </div>
+                    
+                    <div id="loader" class="hidden mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-blue-700 flex items-center gap-3">
+                        <div class="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent"></div>
+                        <span>Bezig met analyseren van sticker...</span>
+                    </div>
 
-<div class="table-container">
-    <table id="resultTable">
-        <thead>
-            <tr>
-                <th>Gescande Code</th>
-                <th>Vermoedelijke Prijs</th>
-                <th>Tijd</th>
-                <th>Barcode</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
-</div>
+                    <div id="error-msg" class="hidden mt-4 p-4 bg-red-50 border border-red-100 rounded-xl text-red-700"></div>
+                </div>
 
-<div style="display:flex;">
-    <button class="btn" style="background:#007bff;" onclick="downloadCSV()">DOWNLOAD EXCEL</button>
-    <button class="btn" style="background:#dc3545;" onclick="clearData()">WIS ALLES</button>
-</div>
+                <!-- Info Paneel -->
+                <div class="bg-blue-900 text-white p-6 rounded-2xl shadow-lg">
+                    <h3 class="font-bold text-lg mb-2">Instructies</h3>
+                    <ul class="text-blue-100 space-y-2 text-sm">
+                        <li class="flex gap-2">
+                            <span class="bg-blue-700 w-5 h-5 flex items-center justify-center rounded-full text-xs">1</span>
+                            Richt de camera op de sticker (zorg voor goed licht).
+                        </li>
+                        <li class="flex gap-2">
+                            <span class="bg-blue-700 w-5 h-5 flex items-center justify-center rounded-full text-xs">2</span>
+                            Klik op 'SCAN STICKER'. De AI leest de gegevens uit.
+                        </li>
+                        <li class="flex gap-2">
+                            <span class="bg-blue-700 w-5 h-5 flex items-center justify-center rounded-full text-xs">3</span>
+                            De info verschijnt in de tabel rechts en blijft daar staan.
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<script>
-    let isScanning = false;
-    let savedScans = JSON.parse(localStorage.getItem('barcode_scans')) || [];
+            <!-- Rechter kolom: Tabel -->
+            <section class="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col min-h-[500px]">
+                <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
+                    <div>
+                        <h2 class="text-xl font-semibold flex items-center gap-2">
+                            <i data-lucide="list" class="text-blue-600"></i>
+                            Gescande Items
+                        </h2>
+                        <p class="text-sm text-slate-500">Scan de barcodes direct vanaf dit scherm</p>
+                    </div>
+                    <button id="btn-clear-all" class="text-red-500 hover:bg-red-50 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        Alles Wissen
+                    </button>
+                </div>
 
-    window.onload = () => {
-        renderTable();
-        startScanner();
-    };
+                <div class="flex-1 overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-600 text-xs uppercase tracking-wider">
+                                <th class="px-6 py-4 font-semibold">Datum/Info</th>
+                                <th class="px-6 py-4 font-semibold">Product/Omschr.</th>
+                                <th class="px-6 py-4 font-semibold">Prijs</th>
+                                <th class="px-6 py-4 font-semibold">Barcode</th>
+                                <th class="px-6 py-4 font-semibold w-10"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="scan-history" class="divide-y divide-slate-100">
+                            <!-- Items verschijnen hier -->
+                            <tr id="empty-state">
+                                <td colspan="5" class="px-6 py-20 text-center text-slate-400">
+                                    <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-3 opacity-20"></i>
+                                    Nog geen scans uitgevoerd
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </main>
 
-    function startScanner() {
-        Quagga.init({
-            inputStream: {
-                name: "Live",
-                type: "LiveStream",
-                target: document.querySelector('#scanner-container'),
-                constraints: { facingMode: "environment", focusMode: "continuous" }
-            },
-            decoder: { readers: ["code_128_reader", "ean_reader"] }, // Pakt zowel prijsstickers als normale barcodes
-            locate: true
-        }, (err) => {
-            if (err) return;
-            Quagga.start();
+    <script type="module">
+        const apiKey = ""; // API sleutel wordt door de omgeving ingevuld
+        const video = document.getElementById('video-feed');
+        const canvas = document.getElementById('capture-canvas');
+        const btnScan = document.getElementById('btn-scan');
+        const btnClearAll = document.getElementById('btn-clear-all');
+        const btnSwitchCamera = document.getElementById('btn-switch-camera');
+        const historyTable = document.getElementById('scan-history');
+        const scannerLine = document.getElementById('scanner-line');
+        const loader = document.getElementById('loader');
+        const errorMsg = document.getElementById('error-msg');
+        const emptyState = document.getElementById('empty-state');
+
+        let currentStream = null;
+        let useFacingMode = "environment";
+        let scanHistory = JSON.parse(localStorage.getItem('scanHistory') || '[]');
+
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Start Camera
+        async function startCamera() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+            try {
+                const constraints = {
+                    video: { facingMode: useFacingMode }
+                };
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = currentStream;
+            } catch (err) {
+                showError("Kan geen toegang krijgen tot de camera. Geef toestemming.");
+            }
+        }
+
+        btnSwitchCamera.addEventListener('click', () => {
+            useFacingMode = useFacingMode === "user" ? "environment" : "user";
+            startCamera();
         });
 
-        Quagga.onDetected(handleDetection);
-    }
+        function showError(msg) {
+            errorMsg.textContent = msg;
+            errorMsg.classList.remove('hidden');
+            setTimeout(() => errorMsg.classList.add('hidden'), 5000);
+        }
 
-    function handleDetection(data) {
-        if (isScanning) return;
-        const code = data.codeResult.code;
-
-        // Alleen actie ondernemen als we een sterke scan hebben
-        if (code) {
-            isScanning = true;
-            
-            // PRIJS-LOGICA: Veel winkels zetten de prijs in de code
-            // We kijken of de laatste 4 of 5 cijfers op een prijs lijken (bijv. 00500 voor 5 euro)
-            let prijsVermoeden = "Check sticker";
-            if (code.length >= 5) {
-                const laatsteDeel = code.slice(-4); 
-                const euro = parseInt(laatsteDeel.slice(0, 2));
-                const cent = laatsteDeel.slice(2);
-                if (!isNaN(euro)) prijsVermoeden = "€ " + euro + "," + cent;
+        // Render history
+        function renderHistory() {
+            if (scanHistory.length === 0) {
+                emptyState.classList.remove('hidden');
+                // Verwijder alle rijen behalve empty state
+                Array.from(historyTable.children).forEach(child => {
+                    if (child.id !== 'empty-state') child.remove();
+                });
+                return;
             }
 
-            const newEntry = {
-                id: Date.now(),
-                code: code,
-                prijs: prijsVermoeden,
-                tijd: new Date().toLocaleTimeString()
-            };
+            emptyState.classList.add('hidden');
+            // Reset table content
+            Array.from(historyTable.children).forEach(child => {
+                if (child.id !== 'empty-state') child.remove();
+            });
 
-            savedScans.unshift(newEntry);
-            localStorage.setItem('barcode_scans', JSON.stringify(savedScans));
-            renderTable();
-            
-            document.getElementById('last-result').innerHTML = `<b>GEVONDEN:</b> ${code}<br><span style="color:green">${prijsVermoeden}</span>`;
-            
-            // Even wachten voor de volgende scan zodat hij niet 10x dezelfde pakt
-            setTimeout(() => { isScanning = false; }, 3000);
+            // Re-render items (nieuwste bovenaan)
+            scanHistory.slice().reverse().forEach((item, index) => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors group";
+                tr.innerHTML = `
+                    <td class="px-6 py-4">
+                        <div class="text-sm font-medium text-slate-900">${item.datum || 'Onbekend'}</div>
+                        <div class="text-xs text-slate-500 italic">${item.extra || ''}</div>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-slate-600">${item.omschrijving || 'Geen info'}</td>
+                    <td class="px-6 py-4">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-800">
+                            € ${item.prijs || '0.00'}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 font-mono text-sm font-bold text-blue-600 tracking-wider">
+                        ${item.barcode || 'Geen barcode'}
+                    </td>
+                    <td class="px-6 py-4 text-right">
+                        <button onclick="window.deleteItem(${scanHistory.length - 1 - index})" class="p-2 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                            <i data-lucide="x-circle" class="w-5 h-5"></i>
+                        </button>
+                    </td>
+                `;
+                historyTable.appendChild(tr);
+            });
+            lucide.createIcons();
         }
-    }
 
-    function renderTable() {
-        const tbody = document.querySelector('#resultTable tbody');
-        tbody.innerHTML = "";
-        savedScans.forEach(s => {
-            const row = tbody.insertRow();
-            row.innerHTML = `<td>${s.code}</td><td>${s.prijs}</td><td>${s.tijd}</td><td><svg id="bc-${s.id}"></svg></td>`;
-            JsBarcode("#bc-" + s.id, s.code, { format: "CODE128", width: 1.2, height: 40, displayValue: false });
+        window.deleteItem = (index) => {
+            scanHistory.splice(index, 1);
+            localStorage.setItem('scanHistory', JSON.stringify(scanHistory));
+            renderHistory();
+        };
+
+        btnClearAll.addEventListener('click', () => {
+            if (confirm("Weet je zeker dat je alle gescande items wilt verwijderen?")) {
+                scanHistory = [];
+                localStorage.setItem('scanHistory', JSON.stringify(scanHistory));
+                renderHistory();
+            }
         });
-    }
 
-    function clearData() { if(confirm("Lijst wissen?")) { savedScans=[]; localStorage.removeItem('barcode_scans'); renderTable(); } }
-    
-    function downloadCSV() {
-        let csv = "Barcode,Prijs,Tijd\n";
-        savedScans.forEach(s => { csv += `"${s.code}","${s.prijs}","${s.tijd}"\n`; });
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const a = document.createElement('a');
-        a.href = window.URL.createObjectURL(blob); a.download = 'barcodes.csv'; a.click();
-    }
-</script>
+        // AI Scan Logic
+        btnScan.addEventListener('click', async () => {
+            btnScan.disabled = true;
+            scannerLine.style.display = 'block';
+            loader.classList.remove('hidden');
+
+            // Capture image from video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+            const base64Image = canvas.toDataURL('image/jpeg').split(',')[1];
+
+            try {
+                const prompt = "Analyseer deze winkelsticker. Haal de volgende informatie op in JSON formaat: { 'datum': 'datum op sticker', 'omschrijving': 'korte productomschrijving', 'prijs': 'prijs als getal', 'barcode': 'het volledige barcode nummer onder de streepjescode', 'extra': 'overige info zoals kortingspercentage' }. Gebruik de Nederlandse taal voor de velden.";
+                
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [
+                                { text: prompt },
+                                { inlineData: { mimeType: "image/jpeg", data: base64Image } }
+                            ]
+                        }],
+                        generationConfig: { responseMimeType: "application/json" }
+                    })
+                });
+
+                if (!response.ok) throw new Error("AI Service Fout");
+
+                const result = await response.json();
+                const data = JSON.parse(result.candidates[0].content.parts[0].text);
+                
+                scanHistory.push(data);
+                localStorage.setItem('scanHistory', JSON.stringify(scanHistory));
+                renderHistory();
+
+            } catch (err) {
+                showError("Kon de sticker niet goed lezen. Zorg voor scherper beeld.");
+                console.error(err);
+            } finally {
+                btnScan.disabled = false;
+                scannerLine.style.display = 'none';
+                loader.classList.add('hidden');
+            }
+        });
+
+        // Start
+        window.onload = () => {
+            startCamera();
+            renderHistory();
+        };
+    </script>
 </body>
 </html>
