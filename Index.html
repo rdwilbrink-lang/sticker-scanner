@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sticker Scanner Pro</title>
+    <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    <style>
+        body { font-family: sans-serif; margin: 0; background: #f4f4f9; display: flex; flex-direction: column; align-items: center; }
+        #scanner-container { width: 100%; max-width: 500px; height: 300px; border-bottom: 4px solid #007bff; position: relative; overflow: hidden; background: #000; }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        .overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; height: 60%; border: 2px dashed rgba(255,255,255,0.5); pointer-events: none; }
+        .controls { padding: 20px; width: 100%; box-sizing: border-box; }
+        button { width: 100%; padding: 15px; background: #28a745; color: white; border: none; border-radius: 8px; font-size: 18px; margin-bottom: 10px; cursor: pointer; }
+        #status { font-weight: bold; margin-bottom: 10px; color: #555; text-align: center; }
+        table { width: 95%; border-collapse: collapse; margin-top: 20px; background: white; font-size: 14px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background: #007bff; color: white; }
+    </style>
+</head>
+<body>
+
+<div id="scanner-container">
+    <div class="overlay"></div>
+</div>
+
+<div class="controls">
+    <div id="status">Klik op 'Start' om de camera te activeren</div>
+    <button onclick="startScanner()">Start Scanner</button>
+    
+    <h3>Gescande Stickers</h3>
+    <table id="resultTable">
+        <thead>
+            <tr>
+                <th>Datum</th>
+                <th>Product</th>
+                <th>Prijs</th>
+                <th>Barcode</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<script>
+    let isScanning = false;
+
+    function startScanner() {
+        if (isScanning) return;
+        isScanning = true;
+        document.getElementById('status').innerText = "Richt op de barcode...";
+
+        Quagga.init({
+            inputStream: {
+                name: "Live",
+                type: "LiveStream",
+                target: document.querySelector('#scanner-container'),
+                constraints: { facingMode: "environment" }
+            },
+            decoder: { readers: ["code_128_reader"] }
+        }, (err) => {
+            if (err) { alert(err); return; }
+            Quagga.start();
+        });
+
+        Quagga.onDetected(async (data) => {
+            const code = data.codeResult.code;
+            Quagga.stop();
+            isScanning = false;
+            document.getElementById('status').innerText = "Barcode gevonden! Bezig met tekst herkenning...";
+            
+            // Maak een foto van de huidige video stream voor OCR
+            await processOCR(code);
+        });
+    }
+
+    async function processOCR(barcode) {
+        const video = document.querySelector('video');
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+
+        // Voer OCR uit
+        const result = await Tesseract.recognize(canvas, 'nld');
+        const text = result.data.text;
+
+        // Logica om data te filteren
+        const prijsMatch = text.match(/€?\s?(\d+[,.]\d{2})/);
+        const datumMatch = text.match(/\d{2}-\d{2}-\d{2}/);
+        const regels = text.split('\n').filter(r => r.trim().length > 5);
+
+        const data = {
+            datum: datumMatch ? datumMatch[0] : "Niet gevonden",
+            product: regels[0] ? regels[0].trim() : "Onbekend",
+            prijs: prijsMatch ? prijsMatch[1] : "0,00",
+            barcode: barcode
+        };
+
+        addToTable(data);
+        document.getElementById('status').innerText = "Klaar! Klaar voor volgende scan.";
+    }
+
+    function addToTable(data) {
+        const tbody = document.querySelector('#resultTable tbody');
+        const row = tbody.insertRow(0);
+        row.innerHTML = `<td>${data.datum}</td><td>${data.product}</td><td>€ ${data.prijs}</td><td>${data.barcode}</td>`;
+    }
+</script>
+
+</body>
+</html>
