@@ -7,6 +7,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons via CDN -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- JsBarcode voor het genereren van fysieke barcodes -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <style>
         .gradient-bg {
             background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
@@ -39,6 +41,10 @@
             0% { top: 0; }
             100% { top: 100%; }
         }
+        .barcode-svg {
+            max-width: 120px;
+            height: auto;
+        }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen font-sans text-slate-900">
@@ -48,7 +54,7 @@
         <div class="container mx-auto px-4 flex justify-between items-center">
             <div class="flex items-center gap-3">
                 <i data-lucide="barcode" class="w-8 h-8"></i>
-                <h1 class="text-2xl font-bold tracking-tight">SmartScan Retail</h1>
+                <h1 class="text-2xl font-bold tracking-tight">SmartScan Pro</h1>
             </div>
             <div id="status-badge" class="bg-blue-400/30 px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2">
                 <span id="status-dot" class="w-2 h-2 bg-yellow-400 rounded-full"></span>
@@ -85,7 +91,6 @@
                             </button>
                         </div>
                         
-                        <!-- Reserve optie: Bestand uploaden -->
                         <div class="flex items-center gap-2">
                             <label for="file-upload" class="flex-1 cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-600 text-center py-2 rounded-lg text-sm transition-all border border-dashed border-slate-300">
                                 <i data-lucide="upload" class="inline-block w-4 h-4 mr-1"></i>
@@ -97,25 +102,10 @@
                     
                     <div id="loader" class="hidden mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-blue-700 flex items-center gap-3">
                         <div class="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent"></div>
-                        <span>Bezig met analyseren...</span>
+                        <span>Bezig met analyseren en genereren...</span>
                     </div>
 
                     <div id="error-msg" class="hidden mt-4 p-4 bg-red-50 border border-red-100 rounded-xl text-red-700 text-sm"></div>
-                </div>
-
-                <div class="bg-blue-900 text-white p-6 rounded-2xl shadow-lg">
-                    <h3 class="font-bold text-lg mb-2">Help</h3>
-                    <p class="text-sm text-blue-100 mb-2">Zwart scherm? Probeer dit:</p>
-                    <ul class="text-blue-100 space-y-2 text-sm">
-                        <li class="flex gap-2">
-                            <span class="text-blue-400">•</span>
-                            Ververs de pagina en klik op "Toestaan" voor de camera.
-                        </li>
-                        <li class="flex gap-2">
-                            <span class="text-blue-400">•</span>
-                            Gebruik de "Bestand uploaden" knop als de camera niet start.
-                        </li>
-                    </ul>
                 </div>
             </section>
 
@@ -138,7 +128,8 @@
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="bg-slate-50 text-slate-600 text-xs uppercase tracking-wider">
-                                <th class="px-6 py-4 font-semibold">Details</th>
+                                <th class="px-6 py-4 font-semibold">Datum</th>
+                                <th class="px-6 py-4 font-semibold">Categorie</th>
                                 <th class="px-6 py-4 font-semibold">Product</th>
                                 <th class="px-6 py-4 font-semibold">Prijs</th>
                                 <th class="px-6 py-4 font-semibold">Barcode</th>
@@ -147,8 +138,8 @@
                         </thead>
                         <tbody id="scan-history" class="divide-y divide-slate-100">
                             <tr id="empty-state">
-                                <td colspan="5" class="px-6 py-20 text-center text-slate-400">
-                                    Nog geen scans
+                                <td colspan="6" class="px-6 py-20 text-center text-slate-400">
+                                    Nog geen scans uitgevoerd
                                 </td>
                             </tr>
                         </tbody>
@@ -178,7 +169,6 @@
         let useFacingMode = "environment";
         let scanHistory = JSON.parse(localStorage.getItem('scanHistory') || '[]');
 
-        // Veilige icoon-initialisatie
         const initIcons = () => {
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
@@ -189,35 +179,23 @@
             if (currentStream) {
                 currentStream.getTracks().forEach(track => track.stop());
             }
-            
-            statusText.innerText = "Camera starten...";
-            statusDot.className = "w-2 h-2 bg-yellow-400 rounded-full";
-
             try {
                 const constraints = {
                     video: { 
                         facingMode: { ideal: useFacingMode },
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
                     }
                 };
                 currentStream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = currentStream;
-                
-                video.onloadedmetadata = async () => {
-                    try {
-                        await video.play();
-                        statusText.innerText = "Systeem Gereed";
-                        statusDot.className = "w-2 h-2 bg-green-400 rounded-full animate-pulse";
-                    } catch (e) {
-                        console.error("Autoplay geblokkeerd:", e);
-                    }
+                video.onloadedmetadata = () => {
+                    video.play();
+                    statusText.innerText = "Systeem Gereed";
+                    statusDot.className = "w-2 h-2 bg-green-400 rounded-full animate-pulse";
                 };
             } catch (err) {
-                console.error("Camera error:", err);
-                showError("Camera niet gevonden of geblokkeerd. Gebruik de upload-knop.");
-                statusText.innerText = "Camera Fout";
-                statusDot.className = "w-2 h-2 bg-red-400 rounded-full";
+                showError("Camera fout.");
             }
         }
 
@@ -247,21 +225,41 @@
                 const originalIndex = scanHistory.length - 1 - index;
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-slate-50 transition-colors group";
+                
+                const barcodeId = `barcode-${originalIndex}`;
+                
                 tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-xs font-bold">${item.datum || '-'}</td>
                     <td class="px-6 py-4">
-                        <div class="text-xs font-bold text-slate-900">${item.datum || ''}</div>
-                        <div class="text-xs text-slate-500">${item.extra || ''}</div>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                            ${item.categorie || 'Overig'}
+                        </span>
                     </td>
                     <td class="px-6 py-4 text-sm text-slate-600">${item.omschrijving || 'Onbekend'}</td>
                     <td class="px-6 py-4 font-bold text-green-700">€ ${item.prijs || '0.00'}</td>
-                    <td class="px-6 py-4 font-mono text-sm font-bold text-blue-600">${item.barcode || '-'}</td>
+                    <td class="px-6 py-4">
+                        <svg id="${barcodeId}" class="barcode-svg"></svg>
+                    </td>
                     <td class="px-6 py-4 text-right">
-                        <button onclick="window.deleteItem(${originalIndex})" class="text-slate-300 hover:text-red-500">
+                        <button onclick="window.deleteItem(${originalIndex})" class="text-slate-300 hover:text-red-500 transition-colors">
                             <i data-lucide="trash-2" class="w-4 h-4"></i>
                         </button>
                     </td>
                 `;
                 historyTable.appendChild(tr);
+
+                try {
+                    JsBarcode(`#${barcodeId}`, item.barcodeData || "00000000", {
+                        format: "CODE128",
+                        displayValue: false,
+                        height: 40,
+                        width: 2,
+                        margin: 0,
+                        background: "transparent"
+                    });
+                } catch (e) {
+                    console.error("Barcode generatie fout:", e);
+                }
             });
             initIcons();
         }
@@ -272,10 +270,13 @@
             renderHistory();
         };
 
+        // Verbeterde functie voor het wissen van de lijst
         btnClearAll.addEventListener('click', () => {
-            if (confirm("Lijst leegmaken?")) {
+            if (scanHistory.length === 0) return;
+            
+            if (confirm("Weet je zeker dat je de hele lijst wilt wissen?")) {
                 scanHistory = [];
-                localStorage.setItem('scanHistory', JSON.stringify(scanHistory));
+                localStorage.removeItem('scanHistory');
                 renderHistory();
             }
         });
@@ -286,7 +287,16 @@
             errorMsg.classList.add('hidden');
 
             try {
-                const prompt = "Analyseer deze winkelsticker. Geef JSON: { 'datum': 'datum', 'omschrijving': 'productnaam', 'prijs': 'getal', 'barcode': 'barcodenummer', 'extra': 'overige info' }";
+                const prompt = `Analyseer de sticker op de foto. Geef het antwoord in strikt JSON-formaat: 
+                { 
+                  "datum": "datum op sticker", 
+                  "categorie": "afdeling/type", 
+                  "omschrijving": "productnaam", 
+                  "prijs": "getal",
+                  "barcodeData": "string",
+                  "extra": "info" 
+                } 
+                BELANGRIJK: De barcode bevat geen cijfers. Decodeer de visuele streepjes naar een unieke string (bijv. een 8-cijferig nummer of alfanumerieke code) die EXACT deze barcode representeert. Deze string wordt gebruikt om een nieuwe, schone digitale barcode te genereren.`;
                 
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
                     method: 'POST',
@@ -298,11 +308,9 @@
                                 { inlineData: { mimeType: "image/jpeg", data: base64Data } }
                             ]
                         }],
-                        generationConfig: { responseMimeType: "application/json" }
+                        generationConfig: { responseMimeType: "application/json", temperature: 0.1 }
                     })
                 });
-
-                if (!response.ok) throw new Error("Netwerkfout bij AI-scan.");
 
                 const result = await response.json();
                 const data = JSON.parse(result.candidates[0].content.parts[0].text);
@@ -310,9 +318,8 @@
                 scanHistory.push(data);
                 localStorage.setItem('scanHistory', JSON.stringify(scanHistory));
                 renderHistory();
-
             } catch (err) {
-                showError("Kon sticker niet lezen. Probeer een scherpere foto.");
+                showError("Scan mislukt.");
             } finally {
                 scannerLine.style.display = 'none';
                 loader.classList.add('hidden');
@@ -320,17 +327,13 @@
         }
 
         btnScan.addEventListener('click', async () => {
-            if (btnScan.disabled) return;
-            try {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(video, 0, 0);
-                const base64Image = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-                await analyzeImage(base64Image);
-            } catch (e) {
-                showError("Camera niet actief.");
-            }
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+            
+            const fullBase64Image = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
+            await analyzeImage(fullBase64Image);
         });
 
         fileUpload.addEventListener('change', (e) => {
@@ -338,8 +341,8 @@
             if (!file) return;
             const reader = new FileReader();
             reader.onload = async (event) => {
-                const base64 = event.target.result.split(',')[1];
-                await analyzeImage(base64);
+                const base64Full = event.target.result.split(',')[1];
+                await analyzeImage(base64Full);
             };
             reader.readAsDataURL(file);
         });
