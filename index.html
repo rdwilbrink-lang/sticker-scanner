@@ -64,7 +64,7 @@
             100% { top: 100%; }
         }
         .barcode-result-img {
-            max-height: 70px;
+            max-height: 75px;
             width: auto;
             border: 1px solid #e2e8f0;
             background: white;
@@ -98,7 +98,7 @@
                         <i data-lucide="camera" class="text-blue-600"></i>
                         Sticker scannen
                     </h2>
-                    <p class="text-xs text-slate-500 mb-4">Houd de barcode binnen het rode kader voor een scherpe kopie.</p>
+                    <p class="text-xs text-slate-500 mb-4">Houd de barcode binnen het rode kader.</p>
                     
                     <div class="scan-container mb-4">
                         <video id="video-feed" autoplay playsinline muted></video>
@@ -113,7 +113,7 @@
                     <div class="flex flex-col gap-3">
                         <button id="btn-scan" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 text-lg">
                             <i data-lucide="scan"></i>
-                            MAAK FOTO & ANALYSEER
+                            SCAN STICKER
                         </button>
                         <div class="flex gap-2">
                              <button id="btn-switch-camera" class="flex-1 bg-slate-100 hover:bg-slate-200 p-3 rounded-xl text-slate-600 transition-colors flex items-center justify-center gap-2">
@@ -155,7 +155,7 @@
                                 <th class="px-6 py-4 font-semibold">Datum</th>
                                 <th class="px-6 py-4 font-semibold">Product</th>
                                 <th class="px-6 py-4 font-semibold">Prijs</th>
-                                <th class="px-6 py-4 font-semibold">Barcode Foto</th>
+                                <th class="px-6 py-4 font-semibold">Barcode</th>
                                 <th class="px-6 py-4 font-semibold w-10"></th>
                             </tr>
                         </thead>
@@ -173,7 +173,7 @@
     </main>
 
     <script type="module">
-        const apiKey = "AIzaSyCDaOBpb7moLgOo3AEkU6CUhW45yOLWKxY"; // <--- PLAK HIER JE GOOGLE API KEY
+        const apiKey = ""; // <--- PLAK HIER JE GOOGLE API KEY
 
         const video = document.getElementById('video-feed');
         const canvas = document.getElementById('capture-canvas');
@@ -222,12 +222,11 @@
             errorMsg.classList.remove('hidden');
         }
 
-        // Snijdt EXACT uit wat in het rode kader staat
+        // Snijdt EXACT uit wat in het rode kader staat (nu in kleur!)
         function extractBarcodeImage(sourceCanvas) {
             const w = sourceCanvas.width;
             const h = sourceCanvas.height;
             
-            // Komt overeen met de CSS .barcode-guide: left 10%, top 60%, width 80%, height 25%
             const cropX = w * 0.10;
             const cropY = h * 0.60;
             const cropW = w * 0.80;
@@ -237,20 +236,10 @@
             procCanvas.height = cropH;
             const pCtx = procCanvas.getContext('2d');
             
+            // We nemen de foto gewoon in kleur over zonder extra bewerking
             pCtx.drawImage(sourceCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
             
-            // Verbeter het beeld voor de print (maak het scherp zwart/wit)
-            const imageData = pCtx.getImageData(0, 0, cropW, cropH);
-            const data = imageData.data;
-            for (let i = 0; i < data.length; i += 4) {
-                const avg = (data[i] + data[i+1] + data[i+2]) / 3;
-                const threshold = 125; 
-                const val = avg > threshold ? 255 : 0;
-                data[i] = data[i+1] = data[i+2] = val;
-            }
-            pCtx.putImageData(imageData, 0, 0);
-            
-            return procCanvas.toDataURL('image/png');
+            return procCanvas.toDataURL('image/jpeg', 0.95);
         }
 
         function renderHistory() {
@@ -307,7 +296,7 @@
                     body: JSON.stringify({
                         contents: [{
                             parts: [
-                                { text: "Lees datum, omschrijving en prijs van deze winkelsticker. Geef alleen JSON: {\"datum\": \"\", \"omschrijving\": \"\", \"prijs\": \"\"}" },
+                                { text: "Extraheer de datum, omschrijving en prijs van deze sticker. Geef alleen de JSON resultaten terug. Formaat: {\"datum\": \"\", \"omschrijving\": \"\", \"prijs\": \"\"}. Als je een veld niet zeker weet, laat het dan leeg." },
                                 { inlineData: { mimeType: "image/jpeg", data: fullImageBase64 } }
                             ]
                         }],
@@ -316,15 +305,21 @@
                 });
 
                 const result = await response.json();
-                const text = result.candidates[0].content.parts[0].text;
-                const data = JSON.parse(text);
-                data.barcodeImg = barcodeSnapshot;
+                
+                if (result.candidates && result.candidates[0].content.parts[0].text) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    const data = JSON.parse(text);
+                    data.barcodeImg = barcodeSnapshot;
 
-                scanHistory.push(data);
-                localStorage.setItem('scanHistory', JSON.stringify(scanHistory));
-                renderHistory();
+                    scanHistory.push(data);
+                    localStorage.setItem('scanHistory', JSON.stringify(scanHistory));
+                    renderHistory();
+                } else {
+                    throw new Error("Geen data gevonden.");
+                }
             } catch (err) {
-                showError("Fout bij analyseren. Houd de sticker recht.");
+                console.error(err);
+                showError("Kon de sticker niet goed lezen. Probeer het opnieuw met goed licht.");
             } finally {
                 scannerLine.style.display = 'none';
                 loader.classList.add('hidden');
@@ -339,7 +334,7 @@
             ctx.drawImage(video, 0, 0);
             
             const barcodeSnapshot = extractBarcodeImage(canvas);
-            const fullBase64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+            const fullBase64 = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
             await analyzeSticker(fullBase64, barcodeSnapshot);
         });
 
@@ -354,7 +349,7 @@
                     canvas.height = img.height;
                     canvas.getContext('2d').drawImage(img, 0, 0);
                     const barcodeSnap = extractBarcodeImage(canvas);
-                    const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+                    const base64 = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
                     await analyzeSticker(base64, barcodeSnap);
                 };
                 img.src = event.target.result;
@@ -370,4 +365,3 @@
     </script>
 </body>
 </html>
-
