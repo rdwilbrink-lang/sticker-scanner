@@ -224,8 +224,6 @@
         function extractBarcodeImage(sourceCanvas) {
             const w = sourceCanvas.width;
             const h = sourceCanvas.height;
-            
-            // Komt overeen met de blauwe gids
             const cropX = w * 0.10;
             const cropY = h * 0.55;
             const cropW = w * 0.80;
@@ -235,8 +233,6 @@
             procCanvas.height = cropH;
             const pCtx = procCanvas.getContext('2d');
             pCtx.drawImage(sourceCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-            
-            // We laten de uitsnede nu gewoon origineel (geen agressief zwart-wit filter)
             return procCanvas.toDataURL('image/png');
         }
 
@@ -251,7 +247,7 @@
                 tr.className = "hover:bg-slate-50 transition-colors";
                 tr.innerHTML = `
                     <td class="px-6 py-4 text-xs font-bold text-slate-500">${item.datum || '-'}</td>
-                    <td class="px-6 py-4 text-sm font-medium text-slate-700">${item.omschrijving || 'Product'}</td>
+                    <td class="px-6 py-4 text-sm font-medium text-slate-700">${item.omschrijving || 'Onbekend product'}</td>
                     <td class="px-6 py-4 font-bold text-green-700">€ ${item.prijs || '0.00'}</td>
                     <td class="px-6 py-4">
                         <img src="${item.barcodeImg}" class="barcode-result-img" alt="Scan">
@@ -286,26 +282,41 @@
                     body: JSON.stringify({
                         contents: [{
                             parts: [
-                                { text: "Lees de datum, omschrijving en prijs van deze sticker. Zelfs als het wazig is, doe je best om de tekst te herkennen. Geef alleen JSON terug: {\"datum\": \"\", \"omschrijving\": \"\", \"prijs\": \"\"}" },
+                                { text: "Extraheer de datum, omschrijving en prijs van deze sticker. Wees tolerant voor wazigheid. Geef de prijs ALTIJD terug in dit formaat: '0.00'. Geef ALLEEN JSON terug: {\"datum\": \"\", \"omschrijving\": \"\", \"prijs\": \"\"}" },
                                 { inlineData: { mimeType: "image/jpeg", data: fullImageBase64 } }
                             ]
                         }],
-                        generationConfig: { responseMimeType: "application/json" }
+                        generationConfig: { 
+                            responseMimeType: "application/json" 
+                        }
                     })
                 });
 
+                if (!response.ok) throw new Error("Netwerkfout bij AI.");
+
                 const result = await response.json();
                 const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (!text) throw new Error("Geen antwoord.");
                 
-                const data = JSON.parse(text);
+                if (!text) {
+                    throw new Error("Geen leesbare tekst gevonden.");
+                }
+                
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    // Fallback als JSON corrupt is
+                    data = { datum: "Onbekend", omschrijving: "Leesfout", prijs: "0.00" };
+                }
+
                 data.barcodeImg = barcodeSnapshot;
 
                 scanHistory.push(data);
                 localStorage.setItem('scanHistory', JSON.stringify(scanHistory));
                 renderHistory();
             } catch (err) {
-                showError("Leesfout. Zorg voor genoeg licht op de sticker.");
+                console.error(err);
+                showError("Fout: " + err.message + ". Houd de sticker stil en zorg voor licht.");
             } finally {
                 scannerLine.style.display = 'none';
                 loader.classList.add('hidden');
@@ -320,7 +331,7 @@
             ctx.drawImage(video, 0, 0);
             
             const barcodeSnapshot = extractBarcodeImage(canvas);
-            const fullBase64 = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
+            const fullBase64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
             await analyzeSticker(fullBase64, barcodeSnapshot);
         });
 
