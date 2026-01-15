@@ -22,14 +22,13 @@
             height: 100%;
             object-fit: cover;
         }
-        /* Het rode kader waar de gebruiker de barcode in moet houden */
         .barcode-guide {
             position: absolute;
             left: 10%;
-            top: 60%;
+            top: 55%;
             width: 80%;
-            height: 25%;
-            border: 3px solid #ef4444;
+            height: 30%;
+            border: 3px solid #3b82f6;
             border-radius: 8px;
             box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.4);
             z-index: 20;
@@ -39,13 +38,12 @@
             position: absolute;
             top: -25px;
             left: 0;
-            background: #ef4444;
+            background: #3b82f6;
             color: white;
-            font-size: 10px;
-            padding: 2px 6px;
+            font-size: 11px;
+            padding: 2px 8px;
             border-radius: 4px 4px 0 0;
             font-weight: bold;
-            text-transform: uppercase;
         }
         .scanner-line {
             position: absolute;
@@ -64,7 +62,7 @@
             100% { top: 100%; }
         }
         .barcode-result-img {
-            max-height: 75px;
+            max-height: 80px;
             width: auto;
             border: 1px solid #e2e8f0;
             background: white;
@@ -90,20 +88,18 @@
 
     <main class="container mx-auto px-4 pb-20">
         <div class="grid lg:grid-cols-2 gap-8">
-            
-            <!-- Scanner Sectie -->
             <section class="space-y-6">
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <h2 class="text-xl font-semibold mb-2 flex items-center gap-2">
                         <i data-lucide="camera" class="text-blue-600"></i>
-                        Sticker scannen
+                        Scan Sticker
                     </h2>
-                    <p class="text-xs text-slate-500 mb-4">Houd de barcode binnen het rode kader.</p>
+                    <p class="text-xs text-slate-500 mb-4">Plaats de barcode in het blauwe kader en druk op de knop.</p>
                     
                     <div class="scan-container mb-4">
                         <video id="video-feed" autoplay playsinline muted></video>
                         <div class="barcode-guide">
-                            <div class="guide-label">Barcode hier houden</div>
+                            <div class="guide-label">Barcode hier</div>
                         </div>
                         <div id="scanner-line" class="scanner-line"></div>
                         <canvas id="capture-canvas" class="hidden"></canvas>
@@ -113,14 +109,14 @@
                     <div class="flex flex-col gap-3">
                         <button id="btn-scan" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 text-lg">
                             <i data-lucide="scan"></i>
-                            SCAN STICKER
+                            FOTO MAKEN & LEZEN
                         </button>
                         <div class="flex gap-2">
                              <button id="btn-switch-camera" class="flex-1 bg-slate-100 hover:bg-slate-200 p-3 rounded-xl text-slate-600 transition-colors flex items-center justify-center gap-2">
-                                <i data-lucide="refresh-cw" class="w-4 h-4"></i> Camera wisselen
+                                <i data-lucide="refresh-cw" class="w-4 h-4"></i> Camera
                             </button>
                             <label for="file-upload" class="flex-1 cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-600 text-center p-3 rounded-xl transition-all border border-dashed border-slate-300">
-                                <i data-lucide="upload" class="inline-block w-4 h-4 mr-1"></i> Foto uploaden
+                                <i data-lucide="upload" class="inline-block w-4 h-4 mr-1"></i> Upload
                             </label>
                             <input type="file" id="file-upload" accept="image/*" class="hidden">
                         </div>
@@ -128,23 +124,22 @@
                     
                     <div id="loader" class="hidden mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-blue-700 flex items-center gap-3">
                         <div class="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent"></div>
-                        <span>Gegevens ophalen...</span>
+                        <span>Bezig met verwerken...</span>
                     </div>
 
                     <div id="error-msg" class="hidden mt-4 p-4 bg-red-50 border border-red-100 rounded-xl text-red-700 text-sm whitespace-pre-wrap"></div>
                 </div>
             </section>
 
-            <!-- Tabel Sectie -->
             <section class="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col min-h-[500px]">
                 <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
                     <h2 class="text-xl font-semibold flex items-center gap-2">
                         <i data-lucide="list" class="text-blue-600"></i>
-                        Gescande stickers
+                        Lijst
                     </h2>
                     <button id="btn-clear-all" class="text-red-500 hover:bg-red-50 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1">
                         <i data-lucide="trash-2" class="w-4 h-4"></i>
-                        Lijst wissen
+                        Wissen
                     </button>
                 </div>
 
@@ -161,9 +156,7 @@
                         </thead>
                         <tbody id="scan-history" class="divide-y divide-slate-100">
                             <tr id="empty-state">
-                                <td colspan="5" class="px-6 py-20 text-center text-slate-400">
-                                    Nog geen stickers gescand
-                                </td>
+                                <td colspan="5" class="px-6 py-20 text-center text-slate-400">Nog geen scans</td>
                             </tr>
                         </tbody>
                     </table>
@@ -173,7 +166,7 @@
     </main>
 
     <script type="module">
-        const apiKey = "AIzaSyCDaOBpb7moLgOo3AEkU6CUhW45yOLWKxY"; // <--- PLAK HIER JE GOOGLE API KEY
+        const apiKey = "AIzaSyCDaOBpb7moLgOo3AEkU6CUhW45yOLWKxY"; // <--- API KEY HIER
 
         const video = document.getElementById('video-feed');
         const canvas = document.getElementById('capture-canvas');
@@ -199,16 +192,22 @@
         async function startCamera() {
             if (currentStream) currentStream.getTracks().forEach(track => track.stop());
             try {
-                const constraints = { video: { facingMode: { ideal: useFacingMode }, width: { ideal: 1280 }, height: { ideal: 720 } } };
+                const constraints = { 
+                    video: { 
+                        facingMode: { ideal: useFacingMode }, 
+                        width: { min: 1280, ideal: 1920 }, 
+                        height: { min: 720, ideal: 1080 } 
+                    } 
+                };
                 currentStream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = currentStream;
                 video.onloadedmetadata = () => {
                     video.play();
-                    statusText.innerText = "Systeem Online";
-                    statusDot.className = "w-2 h-2 bg-green-400 rounded-full animate-pulse";
+                    statusText.innerText = "Online";
+                    statusDot.className = "w-2 h-2 bg-green-400 rounded-full";
                 };
             } catch (err) {
-                showError("Kan camera niet openen.");
+                showError("Camera fout.");
             }
         }
 
@@ -222,24 +221,23 @@
             errorMsg.classList.remove('hidden');
         }
 
-        // Snijdt EXACT uit wat in het rode kader staat (nu in kleur!)
         function extractBarcodeImage(sourceCanvas) {
             const w = sourceCanvas.width;
             const h = sourceCanvas.height;
             
+            // Komt overeen met de blauwe gids
             const cropX = w * 0.10;
-            const cropY = h * 0.60;
+            const cropY = h * 0.55;
             const cropW = w * 0.80;
-            const cropH = h * 0.25;
+            const cropH = h * 0.30;
 
             procCanvas.width = cropW;
             procCanvas.height = cropH;
             const pCtx = procCanvas.getContext('2d');
-            
-            // We nemen de foto gewoon in kleur over zonder extra bewerking
             pCtx.drawImage(sourceCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
             
-            return procCanvas.toDataURL('image/jpeg', 0.95);
+            // We laten de uitsnede nu gewoon origineel (geen agressief zwart-wit filter)
+            return procCanvas.toDataURL('image/png');
         }
 
         function renderHistory() {
@@ -250,13 +248,13 @@
             scanHistory.slice().reverse().forEach((item, index) => {
                 const originalIndex = scanHistory.length - 1 - index;
                 const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-50 transition-colors group";
+                tr.className = "hover:bg-slate-50 transition-colors";
                 tr.innerHTML = `
-                    <td class="px-6 py-4 whitespace-nowrap text-xs font-bold text-slate-500">${item.datum || '-'}</td>
+                    <td class="px-6 py-4 text-xs font-bold text-slate-500">${item.datum || '-'}</td>
                     <td class="px-6 py-4 text-sm font-medium text-slate-700">${item.omschrijving || 'Product'}</td>
                     <td class="px-6 py-4 font-bold text-green-700">€ ${item.prijs || '0.00'}</td>
                     <td class="px-6 py-4">
-                        <img src="${item.barcodeImg}" class="barcode-result-img" alt="Barcode">
+                        <img src="${item.barcodeImg}" class="barcode-result-img" alt="Scan">
                     </td>
                     <td class="px-6 py-4 text-right">
                         <button onclick="window.deleteItem(${originalIndex})" class="text-slate-300 hover:text-red-500">
@@ -275,16 +273,8 @@
             renderHistory();
         };
 
-        btnClearAll.addEventListener('click', () => {
-            if (confirm("Lijst leegmaken?")) {
-                scanHistory = [];
-                localStorage.removeItem('scanHistory');
-                renderHistory();
-            }
-        });
-
         async function analyzeSticker(fullImageBase64, barcodeSnapshot) {
-            if (!apiKey) { showError("Geen API Key!"); return; }
+            if (!apiKey) { showError("Vul API Key in!"); return; }
             scannerLine.style.display = 'block';
             loader.classList.remove('hidden');
             errorMsg.classList.add('hidden');
@@ -296,7 +286,7 @@
                     body: JSON.stringify({
                         contents: [{
                             parts: [
-                                { text: "Extraheer de datum, omschrijving en prijs van deze sticker. Geef alleen de JSON resultaten terug. Formaat: {\"datum\": \"\", \"omschrijving\": \"\", \"prijs\": \"\"}. Als je een veld niet zeker weet, laat het dan leeg." },
+                                { text: "Lees de datum, omschrijving en prijs van deze sticker. Zelfs als het wazig is, doe je best om de tekst te herkennen. Geef alleen JSON terug: {\"datum\": \"\", \"omschrijving\": \"\", \"prijs\": \"\"}" },
                                 { inlineData: { mimeType: "image/jpeg", data: fullImageBase64 } }
                             ]
                         }],
@@ -305,21 +295,17 @@
                 });
 
                 const result = await response.json();
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!text) throw new Error("Geen antwoord.");
                 
-                if (result.candidates && result.candidates[0].content.parts[0].text) {
-                    const text = result.candidates[0].content.parts[0].text;
-                    const data = JSON.parse(text);
-                    data.barcodeImg = barcodeSnapshot;
+                const data = JSON.parse(text);
+                data.barcodeImg = barcodeSnapshot;
 
-                    scanHistory.push(data);
-                    localStorage.setItem('scanHistory', JSON.stringify(scanHistory));
-                    renderHistory();
-                } else {
-                    throw new Error("Geen data gevonden.");
-                }
+                scanHistory.push(data);
+                localStorage.setItem('scanHistory', JSON.stringify(scanHistory));
+                renderHistory();
             } catch (err) {
-                console.error(err);
-                showError("Kon de sticker niet goed lezen. Probeer het opnieuw met goed licht.");
+                showError("Leesfout. Zorg voor genoeg licht op de sticker.");
             } finally {
                 scannerLine.style.display = 'none';
                 loader.classList.add('hidden');
@@ -338,23 +324,12 @@
             await analyzeSticker(fullBase64, barcodeSnapshot);
         });
 
-        fileUpload.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const img = new Image();
-                img.onload = async () => {
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    canvas.getContext('2d').drawImage(img, 0, 0);
-                    const barcodeSnap = extractBarcodeImage(canvas);
-                    const base64 = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
-                    await analyzeSticker(base64, barcodeSnap);
-                };
-                img.src = event.target.result;
-            };
-            reader.readAsDataURL(file);
+        btnClearAll.addEventListener('click', () => {
+            if (confirm("Lijst wissen?")) {
+                scanHistory = [];
+                localStorage.removeItem('scanHistory');
+                renderHistory();
+            }
         });
 
         window.addEventListener('load', () => {
@@ -365,4 +340,3 @@
     </script>
 </body>
 </html>
-
