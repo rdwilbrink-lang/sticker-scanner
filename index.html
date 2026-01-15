@@ -61,13 +61,25 @@
             0% { top: 0; }
             100% { top: 100%; }
         }
+        /* Styling voor de barcode resultaat zoals in de bijlage */
+        .barcode-result-container {
+            background-color: #ffffff;
+            padding: 10px;
+            border-radius: 6px;
+            border: 2px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 140px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+        }
         .barcode-result-img {
-            max-height: 80px;
-            width: auto;
-            border: 1px solid #e2e8f0;
-            background: white;
-            padding: 2px;
+            max-height: 45px;
+            width: 100%;
+            object-fit: contain;
             display: block;
+            /* Filter voor diep zwarte lijnen op puur witte achtergrond */
+            filter: contrast(1.8) brightness(1.1) grayscale(1);
         }
     </style>
 </head>
@@ -102,7 +114,6 @@
                             <div class="guide-label">Barcode hier</div>
                         </div>
                         <div id="scanner-line" class="scanner-line"></div>
-                        <!-- Verborgen canvas voor beeldverwerking -->
                         <canvas id="capture-canvas" class="hidden"></canvas>
                         <canvas id="barcode-processor" class="hidden"></canvas>
                     </div>
@@ -147,7 +158,7 @@
                                 <th class="px-6 py-4 font-semibold">Datum</th>
                                 <th class="px-6 py-4 font-semibold">Product</th>
                                 <th class="px-6 py-4 font-semibold">Prijs</th>
-                                <th class="px-6 py-4 font-semibold">Barcode Foto</th>
+                                <th class="px-6 py-4 font-semibold">Barcode</th>
                                 <th class="px-6 py-4 font-semibold w-10"></th>
                             </tr>
                         </thead>
@@ -163,7 +174,7 @@
     </main>
 
     <script type="module">
-        const apiKey = "AIzaSyDi3njqd7tjKus4sN6LzwI0tHVUrsJFD60"; // <--- API KEY HIER INVULLEN
+        const apiKey = ""; // <--- API KEY HIER INVULLEN
 
         const video = document.getElementById('video-feed');
         const canvas = document.getElementById('capture-canvas');
@@ -218,12 +229,10 @@
             errorMsg.classList.remove('hidden');
         }
 
-        // Functie die exact de barcode uitsnijdt uit de foto
         function extractBarcodeImage(sourceCanvas) {
             const w = sourceCanvas.width;
             const h = sourceCanvas.height;
             
-            // Verhoudingen gebaseerd op de blauwe hulpgids (10% left, 55% top, 80% width, 30% height)
             const cropX = w * 0.10;
             const cropY = h * 0.55;
             const cropW = w * 0.80;
@@ -233,10 +242,12 @@
             procCanvas.height = cropH;
             const pCtx = procCanvas.getContext('2d');
             
-            // Teken de uitsnede op het tijdelijke canvas
+            // Puur witte achtergrond voor de sticker look
+            pCtx.fillStyle = "#ffffff";
+            pCtx.fillRect(0, 0, cropW, cropH);
+            
             pCtx.drawImage(sourceCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
             
-            // Geef de uitsnede terug als een afbeelding (dataURL)
             return procCanvas.toDataURL('image/png');
         }
 
@@ -254,8 +265,9 @@
                     <td class="px-6 py-4 text-sm font-medium text-slate-700">${item.omschrijving || 'Product'}</td>
                     <td class="px-6 py-4 font-bold text-green-700">€ ${item.prijs || '0.00'}</td>
                     <td class="px-6 py-4">
-                        <!-- Hier plaatsen we de fysieke foto van de barcode uitsnede -->
-                        <img src="${item.barcodeImg}" class="barcode-result-img" alt="Barcode">
+                        <div class="barcode-result-container">
+                            <img src="${item.barcodeImg}" class="barcode-result-img" alt="Scan">
+                        </div>
                     </td>
                     <td class="px-6 py-4 text-right">
                         <button onclick="window.deleteItem(${originalIndex})" class="text-slate-300 hover:text-red-500">
@@ -280,7 +292,7 @@
             scannerLine.style.display = 'block';
             loader.classList.remove('hidden');
             errorMsg.classList.add('hidden');
-            loaderText.innerText = retryCount > 0 ? `Opnieuw proberen (Poging ${retryCount + 1})...` : "AI analyseert foto...";
+            loaderText.innerText = retryCount > 0 ? `Opnieuw proberen...` : "AI analyseert foto...";
 
             try {
                 const controller = new AbortController();
@@ -305,11 +317,9 @@
                 const result = await response.json();
                 const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
                 
-                if (!text) throw new Error("Geen leesbaar resultaat.");
+                if (!text) throw new Error("Fout.");
                 
                 const data = JSON.parse(text);
-                
-                // We voegen de eerder gemaakte barcode foto uitsnede toe aan het object
                 data.barcodeImg = barcodeSnapshot;
 
                 scanHistory.push(data);
@@ -321,7 +331,7 @@
                     await new Promise(r => setTimeout(r, 1000));
                     return analyzeSticker(fullImageBase64, barcodeSnapshot, retryCount + 1);
                 }
-                showError("Verbindingsfout. Controleer je internet of wifi.");
+                showError("Verbindingsfout. Probeer het opnieuw.");
             } finally {
                 scannerLine.style.display = 'none';
                 loader.classList.add('hidden');
@@ -331,19 +341,14 @@
         btnScan.addEventListener('click', async () => {
             if (video.videoWidth === 0) return;
             
-            // 1. Maak een hoge resolutie foto van de hele sticker
             canvas.width = video.videoWidth; 
             canvas.height = video.videoHeight;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(video, 0, 0);
             
-            // 2. Snij direct de barcode uit voor weergave in de tabel
             const barcodeSnapshot = extractBarcodeImage(canvas);
-            
-            // 3. Bereid de volledige foto voor voor de AI (iets gecomprimeerd voor snelheid)
             const fullBase64 = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
             
-            // 4. Start analyse
             await analyzeSticker(fullBase64, barcodeSnapshot);
         });
 
