@@ -39,9 +39,9 @@
             100% { top: 100%; }
         }
         .barcode-result-img {
-            max-height: 60px;
+            max-height: 80px;
             width: auto;
-            filter: contrast(1.8) brightness(1.1);
+            image-rendering: pixelated;
             border: 1px solid #e2e8f0;
             background: white;
             padding: 4px;
@@ -79,13 +79,12 @@
                         <video id="video-feed" autoplay playsinline muted></video>
                         <div id="scanner-line" class="scanner-line"></div>
                         <canvas id="capture-canvas" class="hidden"></canvas>
-                        <canvas id="barcode-processor" class="hidden"></canvas>
                     </div>
 
                     <div class="flex flex-col gap-3">
                         <button id="btn-scan" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 text-lg">
                             <i data-lucide="scan"></i>
-                            MAAK FOTO & SCAN
+                            MAAK FOTO & ANALYSEER
                         </button>
                         <div class="flex gap-2">
                              <button id="btn-switch-camera" class="flex-1 bg-slate-100 hover:bg-slate-200 p-3 rounded-xl text-slate-600 transition-colors flex items-center justify-center gap-2">
@@ -100,7 +99,7 @@
                     
                     <div id="loader" class="hidden mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-blue-700 flex items-center gap-3">
                         <div class="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent"></div>
-                        <span>Gegevens ophalen en barcode vastleggen...</span>
+                        <span>AI zoekt barcode en leest gegevens...</span>
                     </div>
 
                     <div id="error-msg" class="hidden mt-4 p-4 bg-red-50 border border-red-100 rounded-xl text-red-700 text-sm whitespace-pre-wrap"></div>
@@ -127,7 +126,7 @@
                                 <th class="px-6 py-4 font-semibold">Datum</th>
                                 <th class="px-6 py-4 font-semibold">Product</th>
                                 <th class="px-6 py-4 font-semibold">Prijs</th>
-                                <th class="px-6 py-4 font-semibold">Barcode (Foto)</th>
+                                <th class="px-6 py-4 font-semibold">Gevonden Barcode</th>
                                 <th class="px-6 py-4 font-semibold w-10"></th>
                             </tr>
                         </thead>
@@ -149,7 +148,6 @@
 
         const video = document.getElementById('video-feed');
         const canvas = document.getElementById('capture-canvas');
-        const procCanvas = document.getElementById('barcode-processor');
         const btnScan = document.getElementById('btn-scan');
         const btnClearAll = document.getElementById('btn-clear-all');
         const btnSwitchCamera = document.getElementById('btn-switch-camera');
@@ -171,7 +169,7 @@
         async function startCamera() {
             if (currentStream) currentStream.getTracks().forEach(track => track.stop());
             try {
-                const constraints = { video: { facingMode: { ideal: useFacingMode }, width: { ideal: 1280 }, height: { ideal: 720 } } };
+                const constraints = { video: { facingMode: { ideal: useFacingMode }, width: { ideal: 1920 }, height: { ideal: 1080 } } };
                 currentStream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = currentStream;
                 video.onloadedmetadata = () => {
@@ -180,7 +178,7 @@
                     statusDot.className = "w-2 h-2 bg-green-400 rounded-full animate-pulse";
                 };
             } catch (err) {
-                showError("Kan camera niet openen. Zorg voor HTTPS verbinding.");
+                showError("Kan camera niet openen.");
             }
         }
 
@@ -192,36 +190,6 @@
         function showError(msg) {
             errorMsg.textContent = msg;
             errorMsg.classList.remove('hidden');
-        }
-
-        // Snijdt de barcode fysiek uit de foto en maakt hem scherp zwart-wit
-        function extractBarcodeImage(sourceCanvas) {
-            const w = sourceCanvas.width;
-            const h = sourceCanvas.height;
-            
-            // We focussen op het gebied waar de barcode meestal zit (onderste deel van de sticker)
-            const cropW = w * 0.85;
-            const cropH = h * 0.35; // Iets ruimer voor barcodes zonder nummers
-            const cropX = (w - cropW) / 2;
-            const cropY = h * 0.58; 
-
-            procCanvas.width = cropW;
-            procCanvas.height = cropH;
-            const pCtx = procCanvas.getContext('2d');
-            
-            pCtx.drawImage(sourceCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-            
-            const imageData = pCtx.getImageData(0, 0, cropW, cropH);
-            const data = imageData.data;
-            for (let i = 0; i < data.length; i += 4) {
-                const avg = (data[i] + data[i+1] + data[i+2]) / 3;
-                const threshold = 140; 
-                const val = avg > threshold ? 255 : 0;
-                data[i] = data[i+1] = data[i+2] = val;
-            }
-            pCtx.putImageData(imageData, 0, 0);
-            
-            return procCanvas.toDataURL('image/png');
         }
 
         function renderHistory() {
@@ -238,7 +206,7 @@
                     <td class="px-6 py-4 text-sm font-medium text-slate-700">${item.omschrijving || 'Product'}</td>
                     <td class="px-6 py-4 font-bold text-green-700">€ ${item.prijs || '0.00'}</td>
                     <td class="px-6 py-4">
-                        <img src="${item.barcodeImg}" class="barcode-result-img" alt="Gescande Barcode">
+                        ${item.barcodeImg ? `<img src="data:image/png;base64,${item.barcodeImg}" class="barcode-result-img" alt="Barcode">` : '<span class="text-xs text-red-400">Niet gevonden</span>'}
                     </td>
                     <td class="px-6 py-4 text-right">
                         <button onclick="window.deleteItem(${originalIndex})" class="text-slate-300 hover:text-red-500">
@@ -265,9 +233,9 @@
             }
         });
 
-        async function analyzeSticker(fullImageBase64, barcodeBase64) {
+        async function analyzeSticker(fullImageBase64) {
             if (!apiKey || apiKey === "") { 
-                showError("Geen API Key gevonden! Plak je Google API key in de code op regel 141."); 
+                showError("Geen API Key gevonden! Vul deze in op regel 141."); 
                 return; 
             }
             
@@ -276,32 +244,42 @@
             errorMsg.classList.add('hidden');
 
             try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                // We gebruiken de Image-to-Image modaliteit van Gemini om de barcode exact uit de foto te laten snijden
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         contents: [{
                             parts: [
-                                { text: "Lees de datum, de omschrijving en de prijs van deze sticker. Geef alleen JSON terug: {\"datum\": \"\", \"omschrijving\": \"\", \"prijs\": \"\"}" },
+                                { text: "Lees de datum, de omschrijving en de prijs van deze sticker. Zoek daarna de barcode op de foto, snij deze exact uit en stuur deze terug als afbeelding. Geef de tekstgegevens terug in JSON formaat: {\"datum\": \"\", \"omschrijving\": \"\", \"prijs\": \"\"}. Voeg de afbeelding ook toe aan het antwoord." },
                                 { inlineData: { mimeType: "image/jpeg", data: fullImageBase64 } }
                             ]
                         }],
-                        generationConfig: { responseMimeType: "application/json" }
+                        generationConfig: { 
+                            responseModalities: ['TEXT', 'IMAGE'] 
+                        }
                     })
                 });
 
                 const result = await response.json();
-                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (!text) throw new Error("Geen tekst teruggekregen van AI.");
                 
-                const data = JSON.parse(text);
-                data.barcodeImg = barcodeBase64;
+                // Haal de tekst (JSON) uit het antwoord
+                const textPart = result.candidates?.[0]?.content?.parts?.find(p => p.text);
+                if (!textPart) throw new Error("Kon tekst niet lezen.");
+                const data = JSON.parse(textPart.text.replace(/```json|```/g, ""));
+
+                // Haal de uitgesneden barcode-afbeelding uit het antwoord
+                const imagePart = result.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+                if (imagePart) {
+                    data.barcodeImg = imagePart.inlineData.data;
+                }
 
                 scanHistory.push(data);
                 localStorage.setItem('scanHistory', JSON.stringify(scanHistory));
                 renderHistory();
             } catch (err) {
-                showError("Fout bij het analyseren van de sticker. Controleer je internet en API Key.");
+                console.error(err);
+                showError("Fout bij het analyseren. Zorg dat de sticker goed in beeld is.");
             } finally {
                 scannerLine.style.display = 'none';
                 loader.classList.add('hidden');
@@ -309,16 +287,12 @@
         }
 
         btnScan.addEventListener('click', async () => {
-            if (video.videoWidth === 0) return;
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(video, 0, 0);
-            
-            const barcodeSnapshot = extractBarcodeImage(canvas);
-            const fullBase64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-            
-            await analyzeSticker(fullBase64, barcodeSnapshot);
+            const fullBase64 = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
+            await analyzeSticker(fullBase64);
         });
 
         fileUpload.addEventListener('change', (e) => {
@@ -331,9 +305,8 @@
                     canvas.width = img.width;
                     canvas.height = img.height;
                     canvas.getContext('2d').drawImage(img, 0, 0);
-                    const barcodeSnap = extractBarcodeImage(canvas);
-                    const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-                    await analyzeSticker(base64, barcodeSnap);
+                    const base64 = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
+                    await analyzeSticker(base64);
                 };
                 img.src = event.target.result;
             };
